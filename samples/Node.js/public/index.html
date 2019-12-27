@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Resumable.js - Multiple simultaneous, stable and resumable uploads via the HTML5 File API</title>
+  <meta charset="utf-8"/>
+  <link rel="stylesheet" type="text/css" href="style.css"/>
+  <style>
+    .btn button{
+      height: 30px;
+      background-color: #e66a6a;
+      border: 2px #aaa;
+      border-radius: 10px;
+      width: 150px;
+      color: aliceblue;
+    }
+
+    .resumable-list li{
+      border: solid 1px #795548;
+      height: 35px;
+      margin-bottom: 1px;
+      font-size: 13px;
+    }
+
+    .resumable-file-name{
+      display: inline-block;
+      margin-top: 10px;
+    }
+
+    .resumable-file-progress{
+      color: red;
+      font-size: 17px;
+      margin-left: 22px;
+      width: 150px;
+      background: #8cdcd4;
+      display: inline-block;
+      float: right;
+      padding-top: 10px;
+      border-left: 1px solid;
+      height: 70%;
+      text-align: center;
+    }
+
+    .resumable-browse{
+      font-size: initial;
+      color: #f25353;
+    }
+
+    .resumable-file-size{
+      color: #e69578;
+    }
+
+  </style>
+</head>
+<body>
+<div id="frame">
+
+  <h1>Resumable.js</h1>
+  <p>它是一个JavaScript库，可通过HTML5 File API提供多个同时，稳定和可恢复的上载。</p>
+
+  <p>该库旨在将容错功能引入通过HTTP上传大文件的过程。这是通过将每个文件分成小块来完成的。每当块的上载失败时，都会重试上载，直到过程完成为止。
+    这样，在本地或服务器失去网络连接后，上传可以自动恢复上传。此外，它允许用户暂停和继续上载而不会丢失状态。</p>
+  <p>Resumable.js依赖于HTML5 File API以及将文件分割成较小块的功能。当前，这意味着支持仅限于Firefox 4+和Chrome 11+。</p>
+
+  <hr/>
+
+  <h3>Demo</h3>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+  <script src="resumable.js"></script>
+
+  <div class="resumable-error">
+    Your browser, unfortunately, is not supported by Resumable.js. The library requires support for <a
+    href="http://www.w3.org/TR/FileAPI/">the HTML5 File API</a> along with <a
+    href="http://www.w3.org/TR/FileAPI/#normalization-of-params">file slicing</a>.
+  </div>
+
+  <div class="resumable-drop">
+    Drop video files here to upload or <a class="resumable-browse"><u>select from your computer</u></a>
+  </div>
+
+  <div class="resumable-progress">
+    <table>
+      <tr>
+        <td width="100%">
+          <div class="progress-container">
+            <div class="progress-bar"></div>
+          </div>
+        </td>
+        <td class="progress-text" nowrap="nowrap"></td>
+      </tr>
+    </table>
+
+    <div class="btn" style="margin-top: 30px">
+      <button onclick="r.upload(); return(false);" class="progress-resume-link">Resume upload</button>
+      <button onclick="r.pause(); return(false);" class="progress-pause-link">Pause upload</button>
+      <button onclick="r.cancel(); return(false);" class="progress-cancel-link">Cancel upload</button>
+    </div>
+  </div>
+
+  <ul class="resumable-list"></ul>
+
+  <script>
+    var r = new Resumable({
+      target: '/upload',
+      chunkSize: 1 * 1024 * 1024,
+      simultaneousUploads: 4,
+      testChunks: false,
+      throttleProgressCallbacks: 1
+    });
+    // Resumable.js isn't supported, fall back on a different method
+    if (!r.support) {
+      $('.resumable-error').show();
+    } else {
+      // Show a place for dropping/selecting files
+      $('.resumable-drop').show();
+      r.assignDrop($('.resumable-drop')[0]);
+      r.assignBrowse($('.resumable-browse')[0]);
+
+      // Handle file add event
+      r.on('fileAdded', function (file) {
+        console.warn('添加文件')
+        // Show progress pabr
+        $('.resumable-progress, .resumable-list').show();
+        // Show pause, hide resume
+        $('.resumable-progress .progress-resume-link').hide();
+        $('.resumable-progress .progress-pause-link').show();
+        // Add the file to the list
+        $('.resumable-list').append('<li class="resumable-file-' + file.uniqueIdentifier + '"><span class="resumable-file-name"></span> <span class="resumable-file-size"></span><span class="resumable-file-progress"></span>');
+        $('.resumable-file-' + file.uniqueIdentifier + ' .resumable-file-name').html(file.fileName);
+        $('.resumable-file-' + file.uniqueIdentifier + ' .resumable-file-size').html(file.size + '(BYTES)');
+        // Actually start the upload
+        console.log('Actually start the upload')
+        r.upload();
+      });
+      r.on('pause', function () {
+        // Show resume, hide pause
+        console.warn('Show resume, hide pause')
+        $('.resumable-progress .progress-resume-link').show();
+        $('.resumable-progress .progress-pause-link').hide();
+      });
+      r.on('complete', function () {
+        // Hide pause/resume when the upload has completed
+        console.warn('Hide pause/resume when the upload has completed')
+        $('.resumable-progress .progress-resume-link, .resumable-progress .progress-pause-link').hide();
+      });
+      r.on('fileSuccess', function (file, message) {
+        // Reflect that the file upload has completed
+        console.warn('fileSuccess: ', message)
+        $('.resumable-file-' + file.uniqueIdentifier + ' .resumable-file-progress').html('(completed)');
+      });
+      r.on('fileError', function (file, message) {
+        // Reflect that the file upload has resulted in error
+        console.error('fileError: ', message)
+        $('.resumable-file-' + file.uniqueIdentifier + ' .resumable-file-progress').html('(file could not be uploaded: ' + message + ')');
+      });
+      r.on('fileProgress', function (file) {
+        // Handle progress for both the file and the overall upload
+        $('.resumable-file-' + file.uniqueIdentifier + ' .resumable-file-progress').html(Math.floor(file.progress() * 100) + '%');
+        $('.progress-bar').css({width: Math.floor(r.progress() * 100) + '%'});
+      });
+      r.on('cancel', function () {
+        console.warn('file cancel')
+        $('.resumable-file-progress').html('canceled');
+      });
+      r.on('uploadStart', function () {
+        // Show pause, hide resume
+        console.warn('开始上传文件')
+        $('.resumable-progress .progress-resume-link').hide();
+        $('.resumable-progress .progress-pause-link').show();
+      });
+    }
+  </script>
+
+</div>
+</body>
+</html>
+
+
+    
